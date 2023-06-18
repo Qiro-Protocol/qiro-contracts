@@ -24,7 +24,8 @@ contract QiroPool is ERC4626, Ownable {
 
     struct BorrowDetails {
         address user;
-        uint256 amount;
+        uint256 borrowAmount;
+        uint256 repaidAmount;
         uint256 borrowTime;
         uint256 timePeriod;
         string ipfsHash;
@@ -49,6 +50,7 @@ contract QiroPool is ERC4626, Ownable {
         BorrowDetails memory _borrowDetails = BorrowDetails(
             msg.sender,
             amount,
+            0,
             block.timestamp,
             timePeriod,
             ipfsHash
@@ -58,12 +60,30 @@ contract QiroPool is ERC4626, Ownable {
         asset.safeTransfer(msg.sender, amount);
     }
 
+    function repay(uint256 borrowingId, uint256 _time) external {
+        require(_time <= 12);
+        BorrowDetails memory _borrowDetails = borrowDetails[borrowingId];
+        require(_borrowDetails.repaidAmount <= _borrowDetails.borrowedAmount);
+        uint256 _amount = (_borrowDetails.borrowAmount / 12) * _time;
+        uint256 _interest = ((interest / 12) *
+            _time *
+            _borrowDetails.borrowAmount) / _FLOAT_HANDLER_TEN_4;
+        lpPool += _amount;
+        feePool += _interest;
+        borrowDetails[borrowingId].repaidAmount += _amount;
+        asset.safeTransferFrom(msg.sender, address(this), _amount + _interest);
+    }
+
     function setInterest(uint256 _interest) external onlyOwner {
         interest = _interest;
     }
 
     function afterDeposit(uint256 assets, uint256) internal virtual override {
         lpPool += assets;
+    }
+
+    function beforeWithdraw(uint256 assets, uint256) internal virtual override {
+        lpPool -= assets;
     }
 
     /// @notice function responsible to rescue funds if any
