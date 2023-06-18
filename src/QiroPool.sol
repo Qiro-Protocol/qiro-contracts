@@ -63,7 +63,7 @@ contract QiroPool is ERC4626, Ownable {
     function repay(uint256 borrowingId, uint256 _time) external {
         require(_time <= 12);
         BorrowDetails memory _borrowDetails = borrowDetails[borrowingId];
-        require(_borrowDetails.repaidAmount <= _borrowDetails.borrowedAmount);
+        require(_borrowDetails.repaidAmount <= _borrowDetails.borrowAmount);
         uint256 _amount = (_borrowDetails.borrowAmount / 12) * _time;
         uint256 _interest = ((interest / 12) *
             _time *
@@ -83,6 +83,9 @@ contract QiroPool is ERC4626, Ownable {
     }
 
     function beforeWithdraw(uint256 assets, uint256) internal virtual override {
+        uint256 _interest = (((_FLOAT_HANDLER_TEN_4 * assets) / lpPool) *
+            feePool) / 100;
+        asset.safeTransfer(msg.sender, _interest);
         lpPool -= assets;
     }
 
