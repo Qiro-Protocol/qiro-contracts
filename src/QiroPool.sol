@@ -33,7 +33,12 @@ contract QiroPool is ERC4626, Ownable {
 
     mapping(uint256 => BorrowDetails) public borrowDetails;
 
-    constructor(ERC20 _asset) ERC4626(_asset, "Qiro Pool", "QP") {}
+    constructor(
+        ERC20 _asset,
+        uint _interest
+    ) ERC4626(_asset, "Qiro Pool", "QP") {
+        interest = _interest;
+    }
 
     /// @notice This function returns totalAssets available in this pool
     function totalAssets() public view override returns (uint256) {
@@ -84,7 +89,7 @@ contract QiroPool is ERC4626, Ownable {
 
     function beforeWithdraw(uint256 assets, uint256) internal virtual override {
         uint256 _interest = (((_FLOAT_HANDLER_TEN_4 * assets) / lpPool) *
-            feePool) / 100;
+            feePool) / _FLOAT_HANDLER_TEN_4;
         asset.safeTransfer(msg.sender, _interest);
         lpPool -= assets;
     }
