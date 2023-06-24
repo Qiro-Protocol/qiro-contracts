@@ -33,6 +33,25 @@ contract QiroPool is ERC4626, Ownable {
 
     mapping(uint256 => BorrowDetails) public borrowDetails;
 
+    mapping(address => uint[]) public borrowIds;
+
+    mapping(address => BorrowDetails[]) public userBorrowDetails;
+
+    event Borrowed(
+        address user,
+        uint amount,
+        string ipfsHash,
+        uint borrowingId
+    );
+
+    event Repaid(
+        address user,
+        uint borrowingId,
+        uint repayAmount,
+        uint interest,
+        uint remainingAmount
+    );
+
     constructor(
         ERC20 _asset,
         uint _interest
@@ -62,21 +81,74 @@ contract QiroPool is ERC4626, Ownable {
         );
         borrowDetails[_borrowingId.current()] = _borrowDetails;
         lpPool -= amount;
+        borrowIds[msg.sender].push(_borrowingId.current());
+        userBorrowDetails[msg.sender].push(_borrowDetails);
+
         asset.safeTransfer(msg.sender, amount);
+
+        emit Borrowed(msg.sender, amount, ipfsHash, _borrowingId.current());
     }
 
     function repay(uint256 borrowingId, uint256 _time) external {
         require(_time <= 12);
         BorrowDetails memory _borrowDetails = borrowDetails[borrowingId];
         require(_borrowDetails.repaidAmount <= _borrowDetails.borrowAmount);
-        uint256 _amount = (_borrowDetails.borrowAmount / 12) * _time;
+        uint _amount = FixedPointMathLib.mulDivUp(
+            _borrowDetails.borrowAmount,
+            _time,
+            12
+        );
         uint256 _interest = ((interest / 12) *
             _time *
             _borrowDetails.borrowAmount) / _FLOAT_HANDLER_TEN_4;
         lpPool += _amount;
         feePool += _interest;
         borrowDetails[borrowingId].repaidAmount += _amount;
+        if (
+            borrowDetails[borrowingId].repaidAmount >=
+            _borrowDetails.borrowAmount
+        ) {
+            delete borrowDetails[borrowingId];
+            for (uint i; i < borrowIds[msg.sender].length; ) {
+                if (borrowIds[msg.sender][i] == borrowingId) {
+                    if (borrowIds[msg.sender].length > 1) {
+                        for (
+                            uint j = i;
+                            j < borrowIds[msg.sender].length - 1;
+
+                        ) {
+                            borrowIds[msg.sender][j] = borrowIds[msg.sender][
+                                j + 1
+                            ];
+                            userBorrowDetails[msg.sender][
+                                j
+                            ] = userBorrowDetails[msg.sender][j + 1];
+                            unchecked {
+                                ++j;
+                            }
+                        }
+                        borrowIds[msg.sender].pop();
+                        userBorrowDetails[msg.sender].pop();
+                    } else {
+                        borrowIds[msg.sender].pop();
+                        userBorrowDetails[msg.sender].pop();
+                    }
+                }
+                unchecked {
+                    ++i;
+                }
+            }
+        }
+
         asset.safeTransferFrom(msg.sender, address(this), _amount + _interest);
+
+        emit Repaid(
+            msg.sender,
+            borrowingId,
+            _amount,
+            _interest,
+            _borrowDetails.borrowAmount - _borrowDetails.repaidAmount
+        );
     }
 
     function setInterest(uint256 _interest) external onlyOwner {
@@ -85,6 +157,16 @@ contract QiroPool is ERC4626, Ownable {
 
     function afterDeposit(uint256 assets, uint256) internal virtual override {
         lpPool += assets;
+    }
+
+    function userBorrowIds(address user) external view returns (uint[] memory) {
+        return borrowIds[user];
+    }
+
+    function getUserBorrowDetails(
+        address _user
+    ) external view returns (BorrowDetails[] memory) {
+        return userBorrowDetails[_user];
     }
 
     function beforeWithdraw(uint256 assets, uint256) internal virtual override {
