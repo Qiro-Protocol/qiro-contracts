@@ -24,6 +24,7 @@ contract QiroPool is ERC4626, Ownable {
 
     struct BorrowDetails {
         address user;
+        uint256 borrowId;
         uint256 borrowAmount;
         uint256 repaidAmount;
         uint256 borrowTime;
@@ -73,6 +74,7 @@ contract QiroPool is ERC4626, Ownable {
         _borrowingId.increment();
         BorrowDetails memory _borrowDetails = BorrowDetails(
             msg.sender,
+            _borrowingId.current(),
             amount,
             0,
             block.timestamp,
@@ -92,6 +94,7 @@ contract QiroPool is ERC4626, Ownable {
     function repay(uint256 borrowingId, uint256 _time) external {
         require(_time <= 12);
         BorrowDetails memory _borrowDetails = borrowDetails[borrowingId];
+
         require(_borrowDetails.repaidAmount <= _borrowDetails.borrowAmount);
         uint _amount = FixedPointMathLib.mulDivUp(
             _borrowDetails.borrowAmount,
@@ -104,6 +107,33 @@ contract QiroPool is ERC4626, Ownable {
         lpPool += _amount;
         feePool += _interest;
         borrowDetails[borrowingId].repaidAmount += _amount;
+
+        for (uint i; i < userBorrowDetails[msg.sender].length; ) {
+            if (userBorrowDetails[msg.sender][i].borrowId == borrowingId) {
+                if (userBorrowDetails[msg.sender].length > 1) {
+                    for (
+                        uint j = i;
+                        j < userBorrowDetails[msg.sender].length - 1;
+
+                    ) {
+                        userBorrowDetails[msg.sender][j] = userBorrowDetails[
+                            msg.sender
+                        ][j + 1];
+
+                        unchecked {
+                            ++j;
+                        }
+                    }
+                    userBorrowDetails[msg.sender][i].repaidAmount += _amount;
+                } else {
+                    userBorrowDetails[msg.sender][i].repaidAmount += _amount;
+                }
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
         if (
             borrowDetails[borrowingId].repaidAmount >=
             _borrowDetails.borrowAmount
@@ -174,6 +204,7 @@ contract QiroPool is ERC4626, Ownable {
             feePool) / _FLOAT_HANDLER_TEN_4;
         asset.safeTransfer(msg.sender, _interest);
         lpPool -= assets;
+        feePool -= _interest;
     }
 
     /// @notice function responsible to rescue funds if any
