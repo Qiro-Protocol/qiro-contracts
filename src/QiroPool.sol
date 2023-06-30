@@ -16,6 +16,10 @@ contract QiroPool is ERC4626, Ownable {
     /// @notice Float handler to handle percent calculations
     uint256 constant _FLOAT_HANDLER_TEN_4 = 10000;
 
+    uint256 public totalDeposit;
+
+    uint256 public totalInterestCollected;
+
     uint256 public lpPool;
 
     uint256 public feePool;
@@ -27,6 +31,7 @@ contract QiroPool is ERC4626, Ownable {
         uint256 borrowId;
         uint256 borrowAmount;
         uint256 repaidAmount;
+        uint256 interestPaid;
         uint256 borrowTime;
         uint256 timePeriod;
         string ipfsHash;
@@ -77,6 +82,7 @@ contract QiroPool is ERC4626, Ownable {
             _borrowingId.current(),
             amount,
             0,
+            0,
             block.timestamp,
             timePeriod,
             ipfsHash
@@ -106,7 +112,9 @@ contract QiroPool is ERC4626, Ownable {
             _borrowDetails.borrowAmount) / _FLOAT_HANDLER_TEN_4;
         lpPool += _amount;
         feePool += _interest;
+        totalInterestCollected += _interest;
         borrowDetails[borrowingId].repaidAmount += _amount;
+        borrowDetails[borrowingId].interestPaid += _interest;
 
         for (uint i; i < userBorrowDetails[msg.sender].length; ) {
             if (userBorrowDetails[msg.sender][i].borrowId == borrowingId) {
@@ -125,8 +133,10 @@ contract QiroPool is ERC4626, Ownable {
                         }
                     }
                     userBorrowDetails[msg.sender][i].repaidAmount += _amount;
+                    userBorrowDetails[msg.sender][i].interestPaid += _interest;
                 } else {
                     userBorrowDetails[msg.sender][i].repaidAmount += _amount;
+                    userBorrowDetails[msg.sender][i].interestPaid += _interest;
                 }
             }
             unchecked {
@@ -187,6 +197,7 @@ contract QiroPool is ERC4626, Ownable {
 
     function afterDeposit(uint256 assets, uint256) internal virtual override {
         lpPool += assets;
+        totalDeposit += assets;
     }
 
     function userBorrowIds(address user) external view returns (uint[] memory) {
