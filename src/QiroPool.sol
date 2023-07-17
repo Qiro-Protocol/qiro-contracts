@@ -67,7 +67,7 @@ contract QiroPool is ERC4626, Ownable {
 
     /// @notice This function returns totalAssets available in this pool
     function totalAssets() public view override returns (uint256) {
-        return lpPool;
+        return totalSupply;
     }
 
     function borrow(
